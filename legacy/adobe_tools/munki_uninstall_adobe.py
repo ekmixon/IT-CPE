@@ -18,7 +18,7 @@ country = 'US'
 def log(message):
   """Log with tag."""
   tag = 'CPE-remove_adobe'
-  print (tag + ': %s' % str(message))
+  print(tag + f': {str(message)}')
 
 
 if email is None or email == '':
@@ -27,7 +27,7 @@ if email is None or email == '':
 
 result = adobe_tools.remove_products(target_product, email)
 if not result:
-    log("Removal of product %s from %s failed." % (target_product, email))
-    exit(1)
+  log(f"Removal of product {target_product} from {email} failed.")
+  exit(1)
 
 log("Removed %s from %s's account" % (target_product, email))

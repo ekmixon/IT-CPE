@@ -76,9 +76,7 @@ class Pantri(object):
 
             # Only upload objects within "shelves" directory
             if not obj.startswith((self.git_path)):
-                self.logger.error(
-                    "Object %s is not within %s " % (obj, self.paths["shelves"])
-                )
+                self.logger.error(f'Object {obj} is not within {self.paths["shelves"]} ')
                 # TODO create exit functions and update all call sites
                 sys.exit(1)
 
@@ -94,7 +92,7 @@ class Pantri(object):
             else:
                 self.logger.warn("Local file '%s' not found" % obj)
 
-            # Process list of object to calcuate file size, modified time and hash
+                # Process list of object to calcuate file size, modified time and hash
         objects_metadata = self.process_objects(expanded_objects)
         return objects_metadata
 
@@ -129,7 +127,7 @@ class Pantri(object):
 
                 # Determine paths
                 object_path = os.path.abspath(obj)
-                object_metadata_file = "%s.pitem" % object_path
+                object_metadata_file = f"{object_path}.pitem"
 
                 # Add object to gitignore
                 self.add_object_to_gitignore(obj)
@@ -201,7 +199,7 @@ class Pantri(object):
                 # Only care about *.pitem files
                 if re.match("^.*.pitem$", filename):
                     with open(obj) as json_file:
-                        uploaded_objects.update(json.load(json_file))
+                        uploaded_objects |= json.load(json_file)
 
         return uploaded_objects
 
@@ -225,18 +223,13 @@ class Pantri(object):
                 )
                 # Return sha1 hash if checksum is enabled
                 if self.options["checksum"]:
-                    objects_on_disk.update(
-                        {object_name: {"sha1_hash": utils.get_sha1(obj)}}
-                    )
+                    objects_on_disk[object_name] = {"sha1_hash": utils.get_sha1(obj)}
                 else:
-                    objects_on_disk.update(
-                        {
-                            object_name: {
-                                "modified_time": utils.get_modified_time(obj),
-                                "file_size": utils.get_file_size(obj),
-                            }
-                        }
-                    )
+                    objects_on_disk[object_name] = {
+                        "modified_time": utils.get_modified_time(obj),
+                        "file_size": utils.get_file_size(obj),
+                    }
+
 
         return objects_on_disk
 
@@ -253,7 +246,7 @@ class Pantri(object):
             dest_path = os.path.join(dest_path, self.options["shelf"])
 
         # Sync if paths dont match. No need to sync on top of the same path.
-        if not src_path == dest_path:
+        if src_path != dest_path:
             dirsync.sync(
                 src_path,
                 dest_path,
@@ -287,9 +280,9 @@ class Pantri(object):
         objects_to_retrieve = {}
         for obj in uploaded_objects:
             if obj not in objects_on_disk:
-                self.logger.info("Download Object: %s (Object not present)" % obj)
+                self.logger.info(f"Download Object: {obj} (Object not present)")
                 # Build dictionary of objects to download
-                objects_to_retrieve.update({obj: uploaded_objects[obj]})
+                objects_to_retrieve[obj] = uploaded_objects[obj]
                 continue
 
             # Compare sha1 hashes if checksum is enabled
@@ -299,7 +292,7 @@ class Pantri(object):
                 == uploaded_objects[obj]["sha1_hash"]
             ):
 
-                self.logger.info("Skip Object: %s (matching hash)" % obj)
+                self.logger.info(f"Skip Object: {obj} (matching hash)")
                 continue
 
             # Check file size and modified times
@@ -309,14 +302,12 @@ class Pantri(object):
                 == uploaded_objects[obj]["modified_time"]
             ):
 
-                self.logger.info(
-                    "Skip Object: %s (matching file size and modified time.)" % obj
-                )
+                self.logger.info(f"Skip Object: {obj} (matching file size and modified time.)")
                 continue
 
             # Build dictionary of objects to download
-            self.logger.info("Download Object: %s (object different)" % obj)
-            objects_to_retrieve.update({obj: uploaded_objects[obj]})
+            self.logger.info(f"Download Object: {obj} (object different)")
+            objects_to_retrieve[obj] = uploaded_objects[obj]
 
         return objects_to_retrieve
 
@@ -372,10 +363,7 @@ class Pantri(object):
         if "force" in self.options or "pitem" in self.options:
             return False
 
-        if re.match("^Already up-to-date.$", git_pull):
-            return True
-
-        return False
+        return bool(re.match("^Already up-to-date.$", git_pull))
 
     def retrieve(self):
         """
@@ -404,8 +392,7 @@ class Pantri(object):
         if objects_to_retrieve:
             module = self.use_objectstore(self.options["object_store"])
             with module(self.options) as objectstore:
-                for obj in objectstore.retrieve(objects_to_retrieve):
-                    verify_retrieve.append(obj)
+                verify_retrieve.extend(iter(objectstore.retrieve(objects_to_retrieve)))
         else:
             self.logger.info("Repo up-to-date. No files to retrieve.")
 
@@ -427,7 +414,7 @@ class Pantri(object):
         updated_objects["removed"].extend(objects_removed)
 
         # Write updated_objects file to disk
-        filename = "%s_updated_objects.json" % self.shelf
+        filename = f"{self.shelf}_updated_objects.json"
         if self.shelf == "default":
             filename = "all_updated_objects.json"
 
@@ -504,9 +491,7 @@ class Pantri(object):
 
         # Binary check
         object_path = os.path.abspath(obj)
-        if utils.is_binary(object_path):
-            return True
-        return False
+        return bool(utils.is_binary(object_path))
 
     def add_object_to_gitignore(self, obj):
         """
@@ -520,12 +505,11 @@ class Pantri(object):
 
         # Add extension or full path to gitignore
         if file_ext and re.match("^.[a-z]+$", file_ext, re.IGNORECASE):
-            ext = "*" + file_ext.lower()
+            ext = f"*{file_ext.lower()}"
             if ext not in self.gitignore:
                 self.gitignore.append(ext)
-        else:
-            if rel_obj_path not in self.gitignore:
-                self.gitignore.append(rel_obj_path)
+        elif rel_obj_path not in self.gitignore:
+            self.gitignore.append(rel_obj_path)
 
     def write_diff_file(self, object_metadata):
         """
@@ -538,7 +522,7 @@ class Pantri(object):
         path, filename = os.path.split(
             os.path.join(self.paths["shelves"], list(object_metadata.keys())[0])
         )
-        diff_file = "%s/%s.pitem" % (path, filename)
+        diff_file = f"{path}/{filename}.pitem"
         utils.write_json_file(diff_file, object_metadata)
 
     def read_gitignore(self):
@@ -546,20 +530,14 @@ class Pantri(object):
         Read contents of .gitignore
         """
         gitignore_path = self.paths["git_ignore"]
-        gitignore = utils.read_file(gitignore_path).rstrip().split("\n")
-
-        return gitignore
+        return utils.read_file(gitignore_path).rstrip().split("\n")
 
     def write_gitignore(self):
         """
         Exclude binary files uploaded to object store.
         """
 
-        contents = ""
-        # Loop though list, sort, and remove deplicates
-        for item in sorted(set(self.gitignore)):
-            contents += item + "\n"
-
+        contents = "".join(item + "\n" for item in sorted(set(self.gitignore)))
         for path in [self.paths["git_ignore"], self.paths["git_exclude"]]:
             utils.write_file(path, contents)
 
@@ -618,16 +596,11 @@ class Pantri(object):
         """
         Build a dictionary representing the item data for logging
         """
-        json_dict = {}  # type: Dict[str, Any]
-        json_dict["unixname"] = getpass.getuser()
+        json_dict = {"unixname": getpass.getuser()}
         json_dict["command"] = command
         json_dict["object_name"] = object_name
 
-        if "FB" in object_store:
-            json_dict["object_store"] = "Swift"
-        else:
-            json_dict["object_store"] = "Manifold"
-
+        json_dict["object_store"] = "Swift" if "FB" in object_store else "Manifold"
         json_dict["shelf"] = shelf
         json_dict["return_code"] = return_code
         json_dict["checksum"] = checksum

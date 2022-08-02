@@ -6,6 +6,7 @@ With a given manifest and set of catalogs, parse all managed_installs and
 incorporate them into the image.
 """
 
+
 from __future__ import print_function
 import argparse
 import json
@@ -33,11 +34,11 @@ try:
     import munkilib.updatecheck.manifestutils as manifestutils
     import munkilib.updatecheck.download as download
 except ImportError as err:
-    print("Something went wrong! %s" % err)
+    print(f"Something went wrong! {err}")
 
 
 MUNKI_URL = prefs.pref('SoftwareRepoURL')
-PKGS_URL = MUNKI_URL + '/pkgs'
+PKGS_URL = f'{MUNKI_URL}/pkgs'
 BASIC_AUTH = prefs.pref('AdditionalHttpHeaders')
 CACHE = '/tmp'
 
@@ -49,10 +50,7 @@ def download_url_to_cache(url, cache, force=False):
         cache,
         urllib2.unquote(download.get_url_basename(url))
     )
-    custom_headers = ['']
-    if BASIC_AUTH:
-        # custom_headers = ['Authorization: Basic %s' % BASIC_AUTH]
-        custom_headers = BASIC_AUTH
+    custom_headers = BASIC_AUTH or ['']
     if force:
         return fetch.getResourceIfChangedAtomically(
             url, cache_path,
@@ -66,7 +64,7 @@ def download_url_to_cache(url, cache, force=False):
 def handle_dl(item_name, item_url, download_dir, force_download):
     """Download an item into the cache, returns True if downloaded."""
     try:
-        print("Downloading into %s: %s" % (download_dir, item_name))
+        print(f"Downloading into {download_dir}: {item_name}")
         changed = download_url_to_cache(
             item_url,
             download_dir,
@@ -76,7 +74,7 @@ def handle_dl(item_name, item_url, download_dir, force_download):
             print("Found in cache")
         return True
     except fetch.DownloadError as err:
-        print("Download error for %s: %s" % (item_name, err), file=sys.stderr)
+        print(f"Download error for {item_name}: {err}", file=sys.stderr)
     return False
 
 
@@ -92,8 +90,9 @@ def process_manifest_for_key(manifest, manifest_key, parentcatalogs=None):
     """
     if isinstance(manifest, basestring):  # NOQA
         display.display_debug1(
-            "** Processing manifest %s for %s" %
-            (os.path.basename(manifest), manifest_key))
+            f"** Processing manifest {os.path.basename(manifest)} for {manifest_key}"
+        )
+
         manifestdata = manifestutils.get_manifest_data(manifest)
     else:
         manifestdata = manifest
@@ -110,10 +109,10 @@ def process_manifest_for_key(manifest, manifest_key, parentcatalogs=None):
         return
 
     for item in manifestdata.get('included_manifests', []):
-        nestedmanifestpath = manifestutils.get_manifest(item)
-        if not nestedmanifestpath:
+        if nestedmanifestpath := manifestutils.get_manifest(item):
+            process_manifest_for_key(nestedmanifestpath, manifest_key, cataloglist)
+        else:
             raise manifestutils.ManifestException
-        process_manifest_for_key(nestedmanifestpath, manifest_key, cataloglist)
     return (cataloglist, manifestdata.get(manifest_key, []))
 
 
@@ -133,7 +132,7 @@ def obtain_manifest(manifest):
 # Based on updatecheck.py but modified for simpler use
 def get_item_url(item):
     """Take an item dict, return the URL it can be downloaded from."""
-    return PKGS_URL + '/' + urllib2.quote(item["installer_item_location"])
+    return f'{PKGS_URL}/' + urllib2.quote(item["installer_item_location"])
 
 
 def handle_icons(itemlist):
@@ -147,21 +146,17 @@ def handle_icons(itemlist):
     download.download_icons(itemlist)
     # Put the actual Munki cache dir back
     prefs.set_pref('ManagedInstallDir', old_managed)
-    # Build a package of optional Munki icons, so we don't need to cache
-    success = build_pkg(
+    if success := build_pkg(
         os.path.join(CACHE, 'icons'),
         'munki_icons',
         'com.facebook.cpe.munki_icons',
         '/Library/Managed Installs/icons',
         CACHE,
-        'Creating the icon package.'
-    )
-    # Add the icon package to the additional packages list for the template.
-    if success:
+        'Creating the icon package.',
+    ):
         return pkg_output_file
-    else:
-        print("Failed to build icon package!", file=sys.stderr)
-        return None
+    print("Failed to build icon package!", file=sys.stderr)
+    return None
 
 
 def handle_custom():
@@ -178,26 +173,24 @@ def handle_custom():
         CACHE, 'client_resources')
     resource_file = os.path.join(resource_dir, 'custom.zip')
     if os.path.isfile(resource_file):
-            # Client Resources are stored in
-            # /Library/Managed Installs/client_resources/custom.zip
+        # Client Resources are stored in
+        # /Library/Managed Installs/client_resources/custom.zip
         destination_path = '/Library/Managed Installs/client_resources'
         pkg_output_file = os.path.join(CACHE, 'munki_custom.pkg')
-        success = build_pkg(
+        if success := build_pkg(
             resource_dir,
             'munki_custom',
             'com.facebook.cpe.munki_custom',
             destination_path,
             CACHE,
-            'Creating the Munki custom resources package.'
-        )
-        if success:
+            'Creating the Munki custom resources package.',
+        ):
             return pkg_output_file
-        else:
-            print(
-                "Failed to build Munki custom resources package!",
-                file=sys.stderr
-            )
-            return None
+        print(
+            "Failed to build Munki custom resources package!",
+            file=sys.stderr
+        )
+        return None
 
 
 def gather_install_list(manifest):
@@ -209,9 +202,8 @@ def gather_install_list(manifest):
     (cataloglist, managed_installs) = obtain_manifest(manifest)
     install_list = []
     for item in managed_installs:
-        print('Processing %s' % item)
-        detail = catalogs.get_item_detail(item, cataloglist)
-        if detail:
+        print(f'Processing {item}')
+        if detail := catalogs.get_item_detail(item, cataloglist):
             install_list.append(detail)
     # Put the actual Munki cache dir back
     prefs.set_pref('ManagedInstallDir', old_managed)
@@ -226,7 +218,6 @@ def build_exceptions(cache_dir):
     # Empty out existing exceptions packages first, to avoid cruft
     for file in os.listdir(exceptions_pkgs_dir):
         os.unlink(os.path.join(exceptions_pkgs_dir, file))
-    counter = 1
     tmp_cache_dir = '/tmp/individ_except/Library/Managed Installs/Cache'
     try:
         os.makedirs(tmp_cache_dir)
@@ -234,11 +225,10 @@ def build_exceptions(cache_dir):
         # Path likely exists
         pass
     # Now begin our building
-    for exception in os.listdir(exceptions_dir):
+    for counter, exception in enumerate(os.listdir(exceptions_dir), start=1):
         split_name = re.split('_|-|\s', exception)[0]
-        output_name = "munki_cache_%s-%s" % (split_name, str(counter))
+        output_name = f"munki_cache_{split_name}-{str(counter)}"
         receipt_name = os.path.splitext(exception)[0]
-        counter += 1
         # Copy each one to a temporary location
         shutil.copy2(
             os.path.join(cache_dir, 'exceptions', exception),
@@ -247,15 +237,16 @@ def build_exceptions(cache_dir):
         output_exception_pkg = build_pkg(
             tmp_cache_dir,
             output_name,
-            'com.facebook.cpe.munki_exceptions.%s' % receipt_name,
+            f'com.facebook.cpe.munki_exceptions.{receipt_name}',
             '/Library/Managed Installs/Cache',
             exceptions_pkgs_dir,
-            'Building exception pkg for %s' % exception
+            f'Building exception pkg for {exception}',
         )
+
         if output_exception_pkg:
             exceptions_pkg_list.append(output_exception_pkg)
         if not output_exception_pkg:
-            print("Failed to build exceptions package for %s!" % exception)
+            print(f"Failed to build exceptions package for {exception}!")
         # Delete the copied file
         os.unlink(os.path.join(tmp_cache_dir, exception))
     return exceptions_pkg_list
@@ -268,25 +259,21 @@ def create_local_path(path):
             os.makedirs(path)
             return True
         except OSError as err:
-            print("Failed to create %s: %s" % (path, err))
+            print(f"Failed to create {path}: {err}")
             return False
     return True
 
 
 def prepare_local_paths(path_list):
     """Set up the necessary paths for the script."""
-    fails = 0
-    for path in path_list:
-        if not create_local_path(path):
-            fails += 1
-    return fails
+    return sum(not create_local_path(path) for path in path_list)
 
 
 def cleanup_local_cache(item_list, local_path):
     """Remove items from local cache that aren't needed."""
     for item in os.listdir(local_path):
         if item not in item_list:
-            print("Removing: %s" % item)
+            print(f"Removing: {item}")
             os.remove(os.path.join(local_path, item))
 
 
@@ -296,15 +283,13 @@ def parse_extras(extras_file):
     Returns a dict containing a list of both.
     """
     parsed = ''
-    extras = {'exceptions': [], 'additions': []}
     try:
         with open(extras_file, 'rb') as thefile:
             print("Parsing extras file...")
             parsed = json.load(thefile)
     except IOError as err:
-        print("Error parsing extras file: %s" % err)
-    # Check for exceptions
-    extras['exceptions'] = parsed.get("exceptions_list", [])
+        print(f"Error parsing extras file: {err}")
+    extras = {'additions': [], 'exceptions': parsed.get("exceptions_list", [])}
     if extras['exceptions']:
         print("Found exceptions.")
     # Check for additions
@@ -331,19 +316,18 @@ def handle_extras(
         for addition in extras['additions']:
             item_name = download.get_url_basename(addition)
             if "http" in addition:
-                print("Considering %s" % addition)
+                print(f"Considering {addition}")
                 if item_name.endswith('.mobileconfig'):
                     # profiles must be downloaded into the 'exceptions' dir
                     if handle_dl(item_name, addition, exceptions_path, force):
                         except_list.append(item_name)
-                else:
-                    if handle_dl(item_name, addition, additions_path, force):
-                        additions_list.append(os.path.join(
-                            additions_path,
-                            item_name)
-                        )
+                elif handle_dl(item_name, addition, additions_path, force):
+                    additions_list.append(os.path.join(
+                        additions_path,
+                        item_name)
+                    )
             else:
-                "Adding %s locally" % addition
+                f"Adding {addition} locally"
                 additions_list.append(addition)
     if extras['exceptions']:
         for exception in extras['exceptions']:
@@ -361,9 +345,9 @@ def process_managed_installs(
 ):
     """Download managed_installs."""
     print("Checking for managed installs...")
-    print("Exceptions list: %s" % exceptions)
+    print(f"Exceptions list: {exceptions}")
     for item in install_list:
-        print("Looking at: %s" % item['name'])
+        print(f"Looking at: {item['name']}")
         if item['name'] in exceptions:
             print("Adding to exceptions list.")
             exception = True
@@ -405,10 +389,8 @@ def process_managed_installs(
             # Add it to the exceptions list
             if handle_dl(item_basename, itemurl, exceptions_path, force):
                 except_list.append(urllib2.unquote(item_basename))
-        else:
-            # Add it to the item list
-            if handle_dl(item_basename, itemurl, download_path, force):
-                item_list.append(urllib2.unquote(item_basename))
+        elif handle_dl(item_basename, itemurl, download_path, force):
+            item_list.append(urllib2.unquote(item_basename))
 
 
 def wait_for_network():
@@ -480,7 +462,7 @@ def main():
     )
     args = parser.parse_args()
 
-    print("Using Munki repo: %s" % MUNKI_URL)
+    print(f"Using Munki repo: {MUNKI_URL}")
     global CACHE
     CACHE = args.cache
 
@@ -507,10 +489,10 @@ def main():
     install_list = gather_install_list(args.manifest)
 
     # Prior to downloading anything, populate the other lists
-    additions_list = list()
-    item_list = list()
-    except_list = list()
-    exceptions = list()
+    additions_list = []
+    item_list = []
+    except_list = []
+    exceptions = []
     # exceptions[] is a list of exceptions specified by the extras file
     # except_list[] is a list of files downloaded into the exceptions dir
     if args.extras:
@@ -556,9 +538,7 @@ def main():
     if icon_pkg_file:
         additions_list.extend([icon_pkg_file])
 
-    # Munki custom resources handling
-    custom_pkg_file = handle_custom()
-    if custom_pkg_file:
+    if custom_pkg_file := handle_custom():
         additions_list.extend([custom_pkg_file])
 
     # Build each exception into its own package
@@ -577,19 +557,18 @@ def main():
     print("Creating AutoDMG-full.adtmpl.")
     templatepath = os.path.join(CACHE, 'AutoDMG-full.adtmpl')
 
-    plist = dict()
-    plist["ApplyUpdates"] = True
-    plist["SourcePath"] = args.source
-    plist["TemplateFormat"] = "1.0"
-    plist["VolumeName"] = args.volumename
-    plist["VolumeSize"] = args.volumesize
-    plist["AdditionalPackages"] = [
-        os.path.join(
-            dir_struct['downloads'], f
-        ) for f in os.listdir(
-            dir_struct['downloads']
-        ) if (not f == '.DS_Store') and (f not in additions_list)
-    ]
+    plist = {
+        "ApplyUpdates": True,
+        "SourcePath": args.source,
+        "TemplateFormat": "1.0",
+        "VolumeName": args.volumename,
+        "VolumeSize": args.volumesize,
+        "AdditionalPackages": [
+            os.path.join(dir_struct['downloads'], f)
+            for f in os.listdir(dir_struct['downloads'])
+            if f != '.DS_Store' and f not in additions_list
+        ],
+    }
 
     if additions_list:
         plist["AdditionalPackages"].extend(additions_list)
@@ -628,7 +607,7 @@ def main():
         'build', templatepath,
         '--download-updates',
         '-o', dmg_output_path]
-    print("Full command: %s" % cmd)
+    print(f"Full command: {cmd}")
     run(cmd)
     if not os.path.isfile(dmg_output_path):
         print("Failed to create disk image!", file=sys.stderr)

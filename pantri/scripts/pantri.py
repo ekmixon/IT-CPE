@@ -64,11 +64,11 @@ def get_options(args: Namespace) -> Dict[Any, Any]:
     for arg, value in vars(args).items():
         # Dont include the func arg and null values
         if arg != "func" and value:
-            options.update({arg: value})
+            options[arg] = value
 
         # Add method name ie retrieve or store to options
         if arg == "func":
-            options.update({"method": value.__name__})
+            options["method"] = value.__name__
 
     return options
 
@@ -216,10 +216,7 @@ def main(context) -> int:
 
     # Run default functions defined for each command.
     result = args.func(options)
-    if result is False:
-        # If 'pantri auth --test' failed, return non-zero.
-        return 1
-    return 0
+    return 1 if result is False else 0
 
 
 if __name__ == "__main__":

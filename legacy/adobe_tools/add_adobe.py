@@ -20,7 +20,7 @@ def log(message):
 try:
     # Do I exist as a user?
     if not adobe_tools.user_exists(email):
-        log("Creating account for %s" % email)
+        log(f"Creating account for {email}")
         # Add the user
         success = adobe_tools.add_federated_user(
             email,
@@ -30,26 +30,27 @@ try:
             country
         )
         if not success:
-            log("Failed to create account for %s" % email)
+            log(f"Failed to create account for {email}")
             sys.exit(1)
 
     # Does the user already have the product?
-    log("Checking to see if %s already has %s" % (email, target_product))
-    already_have = adobe_tools.does_user_have_product(email, target_product)
-    if already_have:
-        log("User %s already has product %s" % (email, target_product))
+    log(f"Checking to see if {email} already has {target_product}")
+    if already_have := adobe_tools.does_user_have_product(
+        email, target_product
+    ):
+        log(f"User {email} already has product {target_product}")
         sys.exit(0)
 
     # Add desired product
-    log("Adding %s entitlement to %s" % (target_product, email))
+    log(f"Adding {target_product} entitlement to {email}")
     result = adobe_tools.add_products([target_product], email)
     if not result:
-        log("Failed to add product %s to %s" % (target_product, email))
+        log(f"Failed to add product {target_product} to {email}")
         sys.exit(1)
 
     log("Done.")
 except adobe_api.AdobeAPIBadStatusException as e:
-    log("Encountered exception: %s" % e)
+    log(f"Encountered exception: {e}")
     log(
         "You were most likely rate limited - "
         "this will automatically try again later. "

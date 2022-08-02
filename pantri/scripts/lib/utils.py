@@ -33,14 +33,12 @@ def run(cmd, cwd=None, sanitize=True):
     stdout, stderr = p.communicate()
     status_code = p.wait()
 
-    result_dict = {
+    return {
         "stdout": sanitize_output(stdout) if sanitize else stdout,
         "stderr": sanitize_output(stderr) if sanitize else stderr,
         "status": status_code,
-        "success": True if status_code == 0 else False,
+        "success": status_code == 0,
     }
-
-    return result_dict
 
 
 def sanitize_output(text):
@@ -102,16 +100,15 @@ def get_sha1(file_path):
   Returns the sha1 of the file_path
   copied from fs_tools
   """
-    if os.path.exists(file_path):
-        hash = hashlib.sha1()
-        with open(file_path, "rb") as f:
-            chunk = 0
-            while chunk != b"":
-                chunk = f.read(4096)
-                hash.update(chunk)
-            return hash.hexdigest()
-    else:
+    if not os.path.exists(file_path):
         return None
+    hash = hashlib.sha1()
+    with open(file_path, "rb") as f:
+        chunk = 0
+        while chunk != b"":
+            chunk = f.read(4096)
+            hash.update(chunk)
+        return hash.hexdigest()
 
 
 def get_sha256(filename, block_size=65536):
@@ -146,11 +143,7 @@ def get_username():
     else:
         default_username = getpass.getuser()
 
-    username = input("Username [%s]: " % default_username)
-    if not username:
-        username = default_username
-
-    return username
+    return input(f"Username [{default_username}]: ") or default_username
 
 
 def get_user_home_dir() -> str:
@@ -295,10 +288,7 @@ def verify_git_repo(repo_path):
         return False
 
     # If git repository, make sure it is it-bin git repository
-    if re.search("/it-bin", git_remote):
-        return True
-
-    return False
+    return bool(re.search("/it-bin", git_remote))
 
 
 def get_git_commits():
@@ -372,7 +362,7 @@ def changed_files():
 
         offset += 2
 
-        if kind == "M" or kind == "T":
+        if kind in ["M", "T"]:
             modified.append(path)
         elif kind == "A":
             added.append(path)
@@ -407,7 +397,7 @@ def remove(paths):
             try:
                 shutil.rmtree(file_path)
             except Exception:
-                logging.getLogger("pantri").error("Error: %s not removed" % file_path)
+                logging.getLogger("pantri").error(f"Error: {file_path} not removed")
             continue
 
         # Remove files.
@@ -415,7 +405,7 @@ def remove(paths):
             try:
                 os.remove(file_path)
             except Exception:
-                logging.getLogger("pantri").error("Error: %s not removed" % file_path)
+                logging.getLogger("pantri").error(f"Error: {file_path} not removed")
 
 
 def get_modified_time(file_path):
@@ -424,9 +414,7 @@ def get_modified_time(file_path):
 
   Returns the the modified time (in seconds) of the file
   """
-    if os.path.exists(file_path):
-        return int(os.path.getmtime(file_path))
-    return None
+    return int(os.path.getmtime(file_path)) if os.path.exists(file_path) else None
 
 
 def get_file_size(file_path):
@@ -435,9 +423,7 @@ def get_file_size(file_path):
 
   Returns file size in bytes of the file
   """
-    if os.path.exists(file_path):
-        return int(os.path.getsize(file_path))
-    return None
+    return int(os.path.getsize(file_path)) if os.path.exists(file_path) else None
 
 
 def unix_path(path):
@@ -466,10 +452,7 @@ def is_binary(file_path):
         file_cmd = "/usr/bin/file"
 
     file_output = run([file_cmd, "--mime-encoding", "-b", file_path])["stdout"]
-    if bin_regex.search(file_output) is not None:
-        return True
-
-    return False
+    return bin_regex.search(file_output) is not None
 
 
 def __win_find_file_exe():

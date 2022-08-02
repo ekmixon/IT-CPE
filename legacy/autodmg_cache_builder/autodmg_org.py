@@ -143,7 +143,6 @@ def run_unique_code(args):
   Arguments from the script are passed in.
   Return a list of any packages you want included in the additions.
   """
-  pkg_list = []
   # EXAMPLE ORGANIZATION-UNIQUE CODE:
   # Perhaps you want to build a bunch of extra packages to include.
   # You could use the PKG_LIST list above to set up your package building.
@@ -180,7 +179,7 @@ def run_unique_code(args):
   # build_bare_dmg(args.source, args.cache, args.logpath,
   #                str(args.loglevel), args.dsrepo)
   # ********
-  return pkg_list
+  return []
 
 if __name__ == '__main__':
   run_unique_code({})

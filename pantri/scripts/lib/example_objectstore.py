@@ -67,10 +67,7 @@ class Example_ObjectStore(object):
     def retrieve(self, objects_to_sync) -> None:
         self.logger.info("Retrieving from Example...")
 
-        objects = []
-        for obj in objects_to_sync:
-            objects.append(obj)
-
+        objects = list(objects_to_sync)
         with self.client as client:
             for obj in objects:
                 object_path = os.path.join(self.options["dest_sync"], obj)

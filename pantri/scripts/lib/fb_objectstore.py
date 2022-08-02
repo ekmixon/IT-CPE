@@ -49,20 +49,16 @@ class FB_ObjectStore(object):
     password_file = os.path.join(self.git_path,  '.pantri_password')
     if os.path.exists(password_file):
       try:
-        creds = json.loads(utils.read_file(password_file))
-        return creds
+        return json.loads(utils.read_file(password_file))
       except ValueError:
         self.logger.error('Unable to parse password file.')
         sys.exit(1)
     else:
-        raise IOError(
-          'Cannot find .pantri_password. Unable to proceed.')
+      raise IOError(
+        'Cannot find .pantri_password. Unable to proceed.')
 
   def prompt_for_creds(self):
-    if 'password_file' in self.options.keys():
-        return False
-
-    return True
+    return 'password_file' not in self.options.keys()
 
 
   def get_auth_creds(self):
@@ -72,10 +68,7 @@ class FB_ObjectStore(object):
     Else prompt user for creds
     """
 
-    # Handling non-interactive actions.
-    prompt_for_creds = self.prompt_for_creds()
-
-    if prompt_for_creds:
+    if prompt_for_creds := self.prompt_for_creds():
       self.logger.info('Enter Credentials to Pull Auth Token')
       username = utils.get_username()
       password = getpass.getpass()
@@ -91,8 +84,7 @@ class FB_ObjectStore(object):
     auth_token_cache = os.path.join(self.git_path,  '.pantri_auth_token')
     if os.path.exists(auth_token_cache):
       try:
-        auth_token = json.loads(utils.read_file(auth_token_cache))['auth_token']
-        return auth_token
+        return json.loads(utils.read_file(auth_token_cache))['auth_token']
       except:
         pass
 
@@ -124,7 +116,7 @@ class FB_ObjectStore(object):
       )
       return auth_token
     except Exception as error:
-      self.logger.debug('request_auth_token error: %s' % error)
+      self.logger.debug(f'request_auth_token error: {error}')
       self.logger.error('Failed to get auth token. Try again')
       sys.exit(1)
 
@@ -133,7 +125,7 @@ class FB_ObjectStore(object):
     # Cache auth token
     auth_token_cache = os.path.join(self.git_path,  '.pantri_auth_token')
     utils.write_json_file(auth_token_cache, {'auth_token': auth_token})
-    self.logger.info('Auth token stored in %s' % auth_token_cache)
+    self.logger.info(f'Auth token stored in {auth_token_cache}')
 
   def get_auth_token(self):
     """  Return auth token either from cache or request from object store """
@@ -142,10 +134,8 @@ class FB_ObjectStore(object):
 
     # only use cached token if method is 'store' and 'password_file' arg is not
     # passed
-    use_cached_auth_token = (
-      self.options['method'] == 'store' or not
-      'password_file' in self.options.keys()
-    )
+    use_cached_auth_token = (self.options['method'] == 'store'
+                             or 'password_file' not in self.options.keys())
     if os.path.exists(auth_token_cache) and use_cached_auth_token:
       auth_token = self.get_cached_auth_token()
       # Validate and return cached auth token.
@@ -186,22 +176,13 @@ class FB_ObjectStore(object):
         ):
           action = response['status']
           success_msg = 'NOTHING'
-        message = '%s (action: %s) Object: %s' % (
-          success_msg,
-          action,
-          response['object'],
-        )
+        message = f"{success_msg} (action: {action}) Object: {response['object']}"
         self.logger.info(message)
         return True
 
-      if not response['success']:
-        message = ' FAILURE (action: %s) Object: %s Traceback: %s' % (
-          response['action'],
-          response['object'],
-          response['traceback'],
-        )
-        self.logger.warn(message)
-        return False
+      message = f" FAILURE (action: {response['action']}) Object: {response['object']} Traceback: {response['traceback']}"
+      self.logger.warn(message)
+      return False
     except:
       self.logger.warn('FAILURE: Unknown response from Swift')
       return False
@@ -215,15 +196,11 @@ class FB_ObjectStore(object):
     class to do a majority of the work to upload objects.
     """
 
-    objects = []
-    for obj in objects_to_upload:
-      objects.append(
+    objects = [
         swiftclient.service.SwiftUploadObject(
-          source=os.path.join(self.paths['shelves'], obj),
-          object_name=obj
-        )
-      )
-
+            source=os.path.join(self.paths['shelves'], obj), object_name=obj)
+        for obj in objects_to_upload
+    ]
     # Create connection to object store and upload objects
     with swiftclient.service.SwiftService(
       options={
@@ -273,10 +250,7 @@ class FB_ObjectStore(object):
     Downloads list of objects from object store
     """
 
-    objects = []
-    for obj in objects_to_sync:
-      objects.append(obj)
-
+    objects = list(objects_to_sync)
     # Create connection to object store and download objects
     with swiftclient.service.SwiftService(
       options={

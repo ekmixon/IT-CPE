@@ -86,7 +86,7 @@ class AdobeAPIBadStatusException(Exception):
 
     def __str__(self):
         """Text for the error."""
-        return 'Status code %s: %s' % (self.status_code, str(self.text))
+        return f'Status code {self.status_code}: {str(self.text)}'
 
     def __int__(self):
         """Return status code of the error."""
@@ -114,23 +114,13 @@ class AdobeAPIMissingRequirementsException(Exception):
 
     def __str__(self):
         """Text for the error."""
-        return 'Required file is missing: %s' % str(self.filename)
+        return f'Required file is missing: {str(self.filename)}'
 
 
 class AdobeAPIObject(object):
     """Model to represent an Adobe API interface."""
 
-    def __init__(
-        self,
-        username="%s@fb.com" % get_console_user(),
-        private_key_filename=PRIVATE_KEY_DEFAULT_LOC,
-        userconfig=USERCONFIG_DEFAULT_LOC,
-        cache_path=CACHE_DEFAULT_LOC,
-        cache=True,
-        key='email',
-        allow_nonexistent_user=False,
-        splay=random.randrange(-144, 144),
-    ):
+    def __init__(self, username=f"{get_console_user()}@fb.com", private_key_filename=PRIVATE_KEY_DEFAULT_LOC, userconfig=USERCONFIG_DEFAULT_LOC, cache_path=CACHE_DEFAULT_LOC, cache=True, key='email', allow_nonexistent_user=False, splay=random.randrange(-144, 144)):
         """
         Instantiate class variables for our API object model.
 
@@ -189,9 +179,8 @@ class AdobeAPIObject(object):
     # CONFIG
     def __get_private_key(self, priv_key_filename):
         """Retrieve private key from file."""
-        priv_key_file = open(priv_key_filename)
-        priv_key = priv_key_file.read()
-        priv_key_file.close()
+        with open(priv_key_filename) as priv_key_file:
+            priv_key = priv_key_file.read()
         return priv_key
 
     def __get_user_config(self, filename=None):
@@ -246,7 +235,7 @@ class AdobeAPIObject(object):
         """Generate the access token."""
         # Method parameters
         url = "https://" + config_data['ims_host'] + \
-            config_data['ims_endpoint_jwt']
+                config_data['ims_endpoint_jwt']
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "Cache-Control": "no-cache"
@@ -261,9 +250,7 @@ class AdobeAPIObject(object):
         res = requests.post(url, headers=headers, data=body)
         # evaluate response
         if res.status_code == 200:
-            # extract token
-            access_token = json.loads(res.text)["access_token"]
-            return access_token
+            return json.loads(res.text)["access_token"]
         else:
             raise AdobeAPIBadStatusException(
                 res.status_code, res.headers, res.text
@@ -300,13 +287,12 @@ class AdobeAPIObject(object):
 
     def __headers(self, config_data, access_token):
         """Return the headers needed."""
-        headers = {
+        return {
             "Content-type": "application/json",
             "Accept": "application/json",
             "x-api-key": config_data['api_key'],
-            "Authorization": "Bearer " + access_token
+            "Authorization": f"Bearer {access_token}",
         }
-        return headers
 
     # REQUEST INTERACTION FUNCTIONS
     def __submit_request(self, url):
@@ -336,11 +322,10 @@ class AdobeAPIObject(object):
         If the action was not completed, raise
         AdobeAPIIncompleteUserActionException.
         """
-        success = False
         body = json.dumps([body_dict])
         url = "https://" + self.configs['host'] + \
-              self.configs['endpoint'] + "/action/" + \
-              self.configs['org_id']
+                  self.configs['endpoint'] + "/action/" + \
+                  self.configs['org_id']
         res = requests.post(
             url,
             headers=self.__headers(self.configs, self.access_token),
@@ -357,8 +342,7 @@ class AdobeAPIObject(object):
             raise AdobeAPIIncompleteUserActionException(
                 results.get('errors')
             )
-        if results.get('completed') == 1:
-            success = True
+        success = results.get('completed') == 1
         self.update_user()
         return success
 
@@ -380,11 +364,9 @@ class AdobeAPIObject(object):
             # Cache doesn't exist, or is invalid
             self.user = {}
             return
-        productlist = cache_data.get('productlist', [])
-        if productlist:
+        if productlist := cache_data.get('productlist', []):
             self.productlist = productlist
-        userlist = cache_data.get('userlist', [])
-        if userlist:
+        if userlist := cache_data.get('userlist', []):
             self.userlist = userlist
         user_data = cache_data.get('user_data', {})
         if user_data and user_data.get(self.key) == self.username:
@@ -396,10 +378,12 @@ class AdobeAPIObject(object):
 
     def __write_cache(self):
         """Write the values to the cache file."""
-        cache_data = {}
-        cache_data['productlist'] = self.productlist or []
-        cache_data['userlist'] = self.userlist or []
-        cache_data['user_data'] = self.user or {}
+        cache_data = {
+            'productlist': self.productlist or [],
+            'userlist': self.userlist or [],
+            'user_data': self.user or {},
+        }
+
         try:
             with open(self.cache_path, 'wb') as f:
                 json.dump(cache_data, f, indent=True, sort_keys=True)
@@ -436,8 +420,8 @@ class AdobeAPIObject(object):
             productlist = []
             while result.get('lastPage', False) is not True:
                 url = "https://" + self.configs['host'] + \
-                    self.configs['endpoint'] + "/groups/" + \
-                    self.configs['org_id'] + "/" + str(page)
+                        self.configs['endpoint'] + "/groups/" + \
+                        self.configs['org_id'] + "/" + str(page)
                 try:
                     result = self.__submit_request(url)
                     productlist += result.get('groups', [])
@@ -480,8 +464,8 @@ class AdobeAPIObject(object):
             userlist = []
             while result.get('lastPage', False) is not True:
                 url = "https://" + self.configs['host'] + \
-                    self.configs['endpoint'] + "/users/" + \
-                    self.configs['org_id'] + "/" + str(page)
+                        self.configs['endpoint'] + "/users/" + \
+                        self.configs['org_id'] + "/" + str(page)
                 try:
                     result = self.__submit_request(url)
                     userlist += result.get('users', [])
@@ -519,9 +503,9 @@ class AdobeAPIObject(object):
         userlist = []
         while result.get('lastPage', False) is not True:
             url = "https://" + self.configs['host'] + \
-                self.configs['endpoint'] + "/users/" + \
-                self.configs['org_id'] + "/" + str(page) + "/" + \
-                quote(product_config_name)
+                    self.configs['endpoint'] + "/users/" + \
+                    self.configs['org_id'] + "/" + str(page) + "/" + \
+                    quote(product_config_name)
             try:
                 result = self.__submit_request(url)
                 userlist += result.get('users', [])
@@ -537,11 +521,9 @@ class AdobeAPIObject(object):
 
     def data(self):
         """Get the data for the user from the userlist."""
-        for user in self.userlist:
-            if user[self.key] == self.username:
-                return user
-        # If we get here, there was no matching username
-        return {}
+        return next(
+            (user for user in self.userlist if user[self.key] == self.username), {}
+        )
 
     def gather_user(self):
         """
@@ -597,10 +579,10 @@ class AdobeAPIObject(object):
         """Return True if a product config exists."""
         if not self.productlist:
             self.gather_product_list()
-        for product in self.productlist:
-            if productname == product.get('groupName', ''):
-                return True
-        return False
+        return any(
+            productname == product.get('groupName', '')
+            for product in self.productlist
+        )
 
     # ACTION FUNCTIONS
     # These functions are actions you can take on the user, which require
@@ -620,8 +602,7 @@ class AdobeAPIObject(object):
                 }
             ]
         }
-        result = self._submit_user_action_request(add_dict)
-        return result
+        return self._submit_user_action_request(add_dict)
 
     def update_user_information(self, email, country, firstname, lastname):
         """Update the existing user's information."""
@@ -642,8 +623,7 @@ class AdobeAPIObject(object):
             add_dict['do'][0]['update']['firstname'] = firstname
         if lastname:
             add_dict['do'][0]['update']['lastname'] = lastname
-        result = self._submit_user_action_request(add_dict)
-        return result
+        return self._submit_user_action_request(add_dict)
 
     def remove_user_from_org(self):
         """Remove user from organization."""
@@ -657,8 +637,7 @@ class AdobeAPIObject(object):
                 }
             ]
         }
-        result = self._submit_user_action_request(remove_dict)
-        return result
+        return self._submit_user_action_request(remove_dict)
 
     def add_products_to_user(self, products):
         """Add product configs to username."""
