@@ -1,3 +1,4 @@
 dirsync>=2.2.2
 GitPython>=2.0.5
 python-swiftclient>=3.0.0
+requests>=2.32.0 # not directly required, pinned by Snyk to avoid a vulnerability
